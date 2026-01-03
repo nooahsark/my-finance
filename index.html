@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyFinance Dashboard V3.4 (Transactions Layout Update)</title>
+    <title>MyFinance Dashboard V1.0</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -721,7 +721,7 @@
                 <div className="w-full max-w-[1600px] mx-auto h-full flex flex-col">
                     <div className="flex justify-between items-center bg-white px-6 py-4 shadow-sm z-40 shrink-0">
                         <div className="flex items-center gap-8">
-                            <div className="flex items-center gap-3 text-primary font-black text-2xl tracking-tighter"><Icons.Wallet size={32}/> MyFinance <span className="text-secondary font-light">V3.4</span></div>
+                            <div className="flex items-center gap-3 text-primary font-black text-2xl tracking-tighter"><Icons.Wallet size={32}/> MyFinance <span className="text-secondary font-light">V1.0</span></div>
                             <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">{[{id:'dashboard', l:'Dashboard'}, {id:'transactions', l:'Transactions'}, {id:'portfolio', l:'Portfolio'}, {id:'balance', l:'Balance Sheet'}].map(t=>(<button key={t.id} onClick={()=>setActiveTab(t.id)} className={`hidden lg:block px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab===t.id?'bg-white shadow text-primary':'text-slate-500 hover:text-slate-800'}`}>{t.l}</button>))}</div>
                         </div>
                         <div className="flex items-center gap-3 w-full lg:w-auto justify-end">
