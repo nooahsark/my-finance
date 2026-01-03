@@ -398,8 +398,14 @@
         // --- Main App ---
         function FinanceDashboard() {
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-            const [selectedMonthIndex, setSelectedMonthIndex] = useState(new Date().getMonth());
+            const [selectedYear, setSelectedYear] = useState(() => {
+                const saved = localStorage.getItem('selectedYear');
+                return saved ? Number(saved) : new Date().getFullYear();
+            });
+            const [selectedMonthIndex, setSelectedMonthIndex] = useState(() => {
+                const saved = localStorage.getItem('selectedMonthIndex');
+                return saved ? Number(saved) : new Date().getMonth();
+            });
             const [maxYear, setMaxYear] = useState(INITIAL_END_YEAR);
             const [cashFlowRange, setCashFlowRange] = useState(1);
             
@@ -439,6 +445,10 @@
             useEffect(() => localStorage.setItem(STORAGE_KEY_TRADES, JSON.stringify(trades)), [trades]);
             useEffect(() => localStorage.setItem(STORAGE_KEY_BALANCES, JSON.stringify(balanceSnapshots)), [balanceSnapshots]);
             useEffect(() => localStorage.setItem(STORAGE_KEY_API_URL, apiUrl), [apiUrl]);
+            useEffect(() => {
+                localStorage.setItem('selectedYear', selectedYear);
+                localStorage.setItem('selectedMonthIndex', selectedMonthIndex);
+            }, [selectedYear, selectedMonthIndex]);
 
             // --- API / Cloud Sync Logic ---
             useEffect(() => {
