@@ -398,7 +398,7 @@
         // --- Main App ---
         function FinanceDashboard() {
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [selectedYear, setSelectedYear] = useState(2025);
+            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
             const [selectedMonthIndex, setSelectedMonthIndex] = useState(new Date().getMonth());
             const [maxYear, setMaxYear] = useState(INITIAL_END_YEAR);
             const [cashFlowRange, setCashFlowRange] = useState(1);
