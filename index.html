@@ -331,19 +331,36 @@
                             <div className="border rounded-xl p-4 bg-white border-slate-200 shadow-sm border-l-4 border-l-secondary">
                                 <h4 className="font-bold text-lg text-secondary mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">สินทรัพย์ลงทุน (หน่วยลงทุน)</h4>
                                 <div className="flex flex-col gap-6">
-                                    {[ {k:'gpf', l:'กบข.'}, {k:'mutual_fund', l:'กองทุนรวม'}, {k:'stock', l:'หุ้น/ETF'}, {k:'bond', l:'ตราสารหนี้'} ].map(grp => (
-                                        <div key={grp.k} className="flex flex-col gap-2">
-                                            <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded w-fit">{grp.l}</div>
-                                            {grouped[grp.k].map(sym => (
-                                                <div key={sym} className="grid grid-cols-3 gap-2 items-center text-xs pl-2 bg-slate-50 p-2 rounded">
-                                                    <div className="font-bold text-slate-700 truncate text-sm">{sym} <span className="text-[10px] font-normal text-slate-400">({formatNumber(holdings[sym].qty, (grp.k==='stock'?0:2))})</span></div>
-                                                    <input type="text" value={getCurrentSnapValue('prices', sym)} onChange={e=>handleSnap('prices',e.target.value,sym)} className="border rounded p-1 text-right text-slate-600 placeholder-slate-300 bg-white text-xs w-24" placeholder="ราคา"/>
-                                                    <div className="text-right font-bold text-secondary text-sm">{formatNumber((parseFloat(getCurrentSnapValue('prices', sym))||0)*holdings[sym].qty)}</div>
+                                        {/* Unconditional GPF Input */}
+                                        <div className="flex flex-col gap-2">
+                                            <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded w-fit">กบข.</div>
+                                            <div className="grid grid-cols-3 gap-2 items-center text-xs pl-2 bg-slate-50 p-2 rounded">
+                                                <div className="font-bold text-slate-700 truncate text-sm">กบข.</div>
+                                                <input type="text" value={getCurrentSnapValue('gpfValue')} onChange={e=>handleSnap('gpfValue',e.target.value)} className="border rounded p-1 text-right font-bold text-slate-700 placeholder-slate-300 bg-white text-xs w-24" placeholder="มูลค่ารวม"/>
+                                                <div className="text-right font-bold text-secondary text-sm">
+                                                    {formatNumber(parseFloat(getCurrentSnapValue('gpfValue'))||0)}
                                                 </div>
-                                            ))}
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
+
+                                        {/* Loop for other investments */}
+                                        {[ {k:'mutual_fund', l:'กองทุนรวม'}, {k:'stock', l:'หุ้น/ETF'}, {k:'bond', l:'ตราสารหนี้'} ].map(grp => (
+                                            grouped[grp.k] && grouped[grp.k].length > 0 && (
+                                                <div key={grp.k} className="flex flex-col gap-2">
+                                                    <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded w-fit">{grp.l}</div>
+                                                    {grouped[grp.k].map(sym => (
+                                                        <div key={sym} className="grid grid-cols-3 gap-2 items-center text-xs pl-2 bg-slate-50 p-2 rounded">
+                                                            <div className="font-bold text-slate-700 truncate text-sm">{sym} <span className="text-[10px] font-normal text-slate-400">({formatNumber(holdings[sym].qty, (grp.k==='stock'?0:2))})</span></div>
+                                                            <input type="text" value={getCurrentSnapValue('prices', sym)} onChange={e=>handleSnap('prices',e.target.value,sym)} className="border rounded p-1 text-right text-slate-600 placeholder-slate-300 bg-white text-xs w-24" placeholder="ราคา"/>
+                                                            <div className="text-right font-bold text-secondary text-sm">
+                                                                {formatNumber(((parseFloat(getCurrentSnapValue('prices', sym))||0)*holdings[sym].qty))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )
+                                        ))}
+                                    </div>
                             </div>
                         </div>
                         <div className="flex flex-col gap-4">
@@ -594,11 +611,25 @@
 
                 const holdings = getHoldings(date);
                 let invTotal = 0, invList = [];
+
+                // Handle traded assets (excluding GPF)
                 Object.keys(holdings).forEach(sym => {
-                    const type = holdings[sym].type; const qty = snap.assetQuantities?.[sym] ?? holdings[sym].qty; 
-                    let price = type === 'gold' ? parseSnapValue(snap.goldPrice) : parseSnapValue(snap.prices?.[sym]); 
-                    const val = qty * price; if(val > 0) { invTotal += val; invList.push({ name: sym, value: val, type }); }
+                    const type = holdings[sym].type;
+                    if (type === 'gpf') return; // Skip GPF, handled below
+
+                    const qty = snap.assetQuantities?.[sym] ?? holdings[sym].qty;
+                    let price = type === 'gold' ? parseSnapValue(snap.goldPrice) : parseSnapValue(snap.prices?.[sym]);
+                    const val = qty * price;
+
+                    if(val > 0) { invTotal += val; invList.push({ name: sym, value: val, type }); }
                 });
+
+                // Unconditionally add GPF value from the snapshot
+                const gpfVal = parseSnapValue(snap.gpfValue);
+                if (gpfVal > 0) {
+                    invTotal += gpfVal;
+                    invList.push({ name: 'กบข.', value: gpfVal, type: 'gpf' });
+                }
                 const landVal = 1130 * parseSnapValue(snap.landPrice); if (landVal > 0) { invTotal += landVal; invList.push({ name: 'อสังหาฯ', value: landVal, type:'land' }); }
                 const lifeVal = calculateLifeInsuranceValue(new Date(date)); if (lifeVal > 0) { invTotal += lifeVal; invList.push({ name: 'ประกันชีวิต', value: lifeVal, type:'ins' }); }
                 const ssVal = 12600; invTotal += ssVal; invList.push({ name: 'ประกันสังคม', value: ssVal, type:'ss' });
@@ -625,12 +656,19 @@
                 const t = holdings[s].type; 
                 if(grouped[t]) grouped[t].push(s); 
             });
-            const totalPortValue = activeSymbols.reduce((sum, sym) => { 
-                let price = 0; 
-                const type = holdings[sym].type; 
-                if(type==='gold') price = parseFloat(currentSnapshot.goldPrice)||0; 
-                else price = parseFloat(currentSnapshot.prices?.[sym])||0; 
-                return sum + (holdings[sym].qty * price); 
+            const totalPortValue = activeSymbols.reduce((sum, sym) => {
+                const holding = holdings[sym];
+                const type = holding.type;
+                let value = 0;
+                if (type === 'gpf') {
+                    value = parseFloat(currentSnapshot.gpfValue) || 0;
+                } else {
+                    let price = 0;
+                    if (type === 'gold') price = parseFloat(currentSnapshot.goldPrice) || 0;
+                    else price = parseFloat(currentSnapshot.prices?.[sym]) || 0;
+                    value = (holding.qty * price);
+                }
+                return sum + value;
             }, 0);
             
             const balanceSheetCalc = calcAssets(currentSnapshot, balanceDate);
@@ -650,13 +688,20 @@
             }, [overviewCalc]);
 
             const graphStartDate = '2016-10-01'; const validGraphDates = availDates.filter(d => d >= graphStartDate && d <= overviewDateStr);
-            const baseNavForMock = parseFloat(balanceSnapshots[snapDate]?.benchmarkNav) || 15; 
-            const benchmarkData = validGraphDates.map((d, i) => { 
-                const dateObj = new Date(d);
-                const years = (dateObj - new Date(graphStartDate)) / (1000 * 60 * 60 * 24 * 365);
-                const initialMockVal = overviewCalc.totalAssets / 3; 
-                const mockBenchmarkVal = initialMockVal * Math.pow(1 + 0.06, years);
-                return { date: dateObj.toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), benchmarkVal: mockBenchmarkVal };
+            let lastBenchmarkNav = 0;
+            const benchmarkData = validGraphDates.map(d => {
+                const nav = balanceSnapshots[d]?.benchmarkNav;
+                // Check if nav is a valid number-like string
+                if (nav !== undefined && nav !== null && String(nav).trim() !== '') {
+                    const parsedNav = parseFloat(String(nav));
+                    if (!isNaN(parsedNav)) {
+                         lastBenchmarkNav = parsedNav;
+                    }
+                }
+                return {
+                    date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}),
+                    benchmarkVal: lastBenchmarkNav > 0 ? lastBenchmarkNav : null
+                };
             });
             const graphData = validGraphDates.map((d, i) => { const c = calcAssets(balanceSnapshots[d], d); const metric = c.investment + c.liquid + c.ss + c.ins + c.land + c.personal; return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; });
             const combinedGraphData = graphData.map((d, i) => ({ ...d, benchmarkVal: benchmarkData[i]?.benchmarkVal }));
