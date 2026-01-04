@@ -334,12 +334,15 @@
                                         {/* Unconditional GPF Input */}
                                         <div className="flex flex-col gap-2">
                                             <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded w-fit">กบข.</div>
-                                            <div className="grid grid-cols-3 gap-2 items-center text-xs pl-2 bg-slate-50 p-2 rounded">
+                                            <div className="flex justify-between items-center text-xs pl-2 bg-slate-50 p-2 rounded">
                                                 <div className="font-bold text-slate-700 truncate text-sm">กบข.</div>
-                                                <input type="text" value={getCurrentSnapValue('gpfValue')} onChange={e=>handleSnap('gpfValue',e.target.value)} className="border rounded p-1 text-right font-bold text-slate-700 placeholder-slate-300 bg-white text-xs w-24" placeholder="มูลค่ารวม"/>
-                                                <div className="text-right font-bold text-secondary text-sm">
-                                                    {formatNumber(parseFloat(getCurrentSnapValue('gpfValue'))||0)}
-                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={getCurrentSnapValue('gpfValue')}
+                                                    onChange={e=>handleSnap('gpfValue',e.target.value)}
+                                                    className="border rounded p-1 text-right font-bold text-slate-700 placeholder-slate-300 bg-white text-sm w-24"
+                                                    placeholder="0"
+                                                />
                                             </div>
                                         </div>
 
