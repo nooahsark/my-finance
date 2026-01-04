@@ -653,7 +653,7 @@
 
             // FIX: Variable name changed from currentHoldings to holdings to match prop usage
             const holdings = getHoldings(balanceDate);
-            const activeSymbols = Object.keys(holdings).filter(s => holdings[s].qty > 0).sort();
+            const activeSymbols = Object.keys(holdings).filter(s => holdings[s].qty > 0.0001).sort();
             const grouped = { gpf:[], mutual_fund:[], stock:[], bond:[], gold: [] };
             activeSymbols.forEach(s => { 
                 const t = holdings[s].type; 
