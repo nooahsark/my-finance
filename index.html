@@ -702,6 +702,30 @@
 
             const graphStartDate = '2016-10-01'; const validGraphDates = availDates.filter(d => d >= graphStartDate && d <= overviewDateStr);
             
+            let lastBenchmarkNav = 0;
+            const benchmarkData = (validGraphDates || []).map(d => {
+                const nav = balanceSnapshots[d]?.benchmarkNav;
+                // Check if nav is a valid number-like string
+                if (nav !== undefined && nav !== null && String(nav).trim() !== '') {
+                    const parsedNav = parseFloat(String(nav));
+                    if (!isNaN(parsedNav)) {
+                         lastBenchmarkNav = parsedNav;
+                    }
+                }
+                return {
+                    date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}),
+                    benchmarkVal: lastBenchmarkNav > 0 ? lastBenchmarkNav : null
+                };
+            });
+            const graphData = (validGraphDates || []).map((d, i) => { 
+                const snap = balanceSnapshots[d];
+                if (!snap) return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: 0 };
+                const c = calcAssets(snap, d); 
+                const metric = c.investment + c.liquid + c.ss + c.ins + c.land; 
+                return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; 
+            });
+            const combinedGraphData = graphData.map((d, i) => ({ ...d, benchmarkVal: benchmarkData[i]?.benchmarkVal }));
+            
             const calculateRealIRR = useMemo(() => {
                 if (!validGraphDates || validGraphDates.length < 2 || !snapDate) return 0;
                 const cashFlows = [];
@@ -734,30 +758,6 @@
                 return calculateXIRR(cashFlows);
             }, [trades, validGraphDates, snapDate, overviewCalc]);
             const currentIRR = calculateRealIRR;
-            
-            let lastBenchmarkNav = 0;
-            const benchmarkData = (validGraphDates || []).map(d => {
-                const nav = balanceSnapshots[d]?.benchmarkNav;
-                // Check if nav is a valid number-like string
-                if (nav !== undefined && nav !== null && String(nav).trim() !== '') {
-                    const parsedNav = parseFloat(String(nav));
-                    if (!isNaN(parsedNav)) {
-                         lastBenchmarkNav = parsedNav;
-                    }
-                }
-                return {
-                    date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}),
-                    benchmarkVal: lastBenchmarkNav > 0 ? lastBenchmarkNav : null
-                };
-            });
-            const graphData = (validGraphDates || []).map((d, i) => { 
-                const snap = balanceSnapshots[d];
-                if (!snap) return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: 0 };
-                const c = calcAssets(snap, d); 
-                const metric = c.investment + c.liquid + c.ss + c.ins + c.land; 
-                return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; 
-            });
-            const combinedGraphData = graphData.map((d, i) => ({ ...d, benchmarkVal: benchmarkData[i]?.benchmarkVal }));
 
             const cashFlowData = historicalData.filter(d => { const selDate = new Date(selectedYear, selectedMonthIndex, 1); const diff = (selDate - d.dateObj)/(1000*60*60*24*30); return diff >= 0 && diff < cashFlowRange*12; }).sort((a,b)=>a.dateObj-b.dateObj).map(d => ({ name: d.axisLabel, income: d.income, expense: d.expense }));
             const expPieData = FORM_CATEGORIES.expense.map(c => ({ name: c, value: parseFloat(formData[c])||0 })).filter(d=>d.value>0).sort((a,b)=>b.value-a.value); const top5Exp = expPieData.slice(0, 5); if (expPieData.length > 5) top5Exp.push({ name: 'ค่าใช้จ่ายอื่น ๆ', value: expPieData.slice(5).reduce((s,i)=>s+i.value,0) }); const totalExp = expPieData.reduce((s,i)=>s+i.value,0);
