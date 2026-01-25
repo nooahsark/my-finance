@@ -689,6 +689,9 @@
             
             const balanceSheetCalc = calcAssets(currentSnapshot, balanceDate);
 
+            const calculateMockIRR = () => { return 7.5; };
+            const currentIRR = calculateMockIRR();
+
             const cards = [ { label: 'ความมั่งคั่งสุทธิ', val: netWorth, color: 'text-primary', b:'border-primary' }, { label: 'สินทรัพย์รวม', val: overviewCalc.totalAssets, color: 'text-secondary', b:'border-secondary' }, { label: 'หนี้สินรวม', val: overviewCalc.totalLiab, color: 'text-alert', b:'border-alert' }, { label: 'เงินสดคงเหลือ', val: overviewCalc.liquid, color: 'text-slate-600', b:'border-slate-300' } ];
             const combinedAssetsData = useMemo(() => {
                 const grouped = {};
@@ -701,9 +704,8 @@
             }, [overviewCalc]);
 
             const graphStartDate = '2016-10-01'; const validGraphDates = availDates.filter(d => d >= graphStartDate && d <= overviewDateStr);
-            
             let lastBenchmarkNav = 0;
-            const benchmarkData = (validGraphDates || []).map(d => {
+            const benchmarkData = validGraphDates.map(d => {
                 const nav = balanceSnapshots[d]?.benchmarkNav;
                 // Check if nav is a valid number-like string
                 if (nav !== undefined && nav !== null && String(nav).trim() !== '') {
@@ -717,53 +719,14 @@
                     benchmarkVal: lastBenchmarkNav > 0 ? lastBenchmarkNav : null
                 };
             });
-            const graphData = (validGraphDates || []).map((d, i) => { 
-                const snap = balanceSnapshots[d];
-                if (!snap) return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: 0 };
-                const c = calcAssets(snap, d); 
-                const metric = c.investment + c.liquid + c.ss + c.ins + c.land; 
-                return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; 
-            });
+            const graphData = validGraphDates.map((d, i) => { const c = calcAssets(balanceSnapshots[d], d); const metric = c.investment + c.liquid + c.ss + c.ins + c.land; return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; });
             const combinedGraphData = graphData.map((d, i) => ({ ...d, benchmarkVal: benchmarkData[i]?.benchmarkVal }));
-            
-            const calculateRealIRR = useMemo(() => {
-                if (!validGraphDates || validGraphDates.length < 2 || !snapDate) return 0;
-                const cashFlows = [];
-                const firstDate = new Date(validGraphDates[0]);
-                
-                // Collect all trades as cash flows (buy = negative, sell = positive)
-                if (trades && trades.length > 0) {
-                    trades.forEach(t => {
-                        const tradeDate = new Date(t.date);
-                        if (tradeDate >= firstDate && tradeDate <= new Date(snapDate)) {
-                            if (t.type === 'buy') {
-                                cashFlows.push({ amount: -t.total, date: tradeDate });
-                            } else if (t.type === 'sell' || t.type === 'sell_all') {
-                                cashFlows.push({ amount: t.total, date: tradeDate });
-                            }
-                        }
-                    });
-                }
-                
-                // Add current portfolio value as final cash flow (positive)
-                const currentVal = overviewCalc ? (overviewCalc.investment + overviewCalc.liquid + overviewCalc.ss + overviewCalc.ins + overviewCalc.land) : 0;
-                if (currentVal > 0) {
-                    cashFlows.push({ amount: currentVal, date: new Date(snapDate) });
-                }
-                
-                // Sort by date
-                cashFlows.sort((a, b) => a.date - b.date);
-                
-                if (cashFlows.length < 2) return 0;
-                return calculateXIRR(cashFlows);
-            }, [trades, validGraphDates, snapDate, overviewCalc]);
-            const currentIRR = calculateRealIRR;
 
             const cashFlowData = historicalData.filter(d => { const selDate = new Date(selectedYear, selectedMonthIndex, 1); const diff = (selDate - d.dateObj)/(1000*60*60*24*30); return diff >= 0 && diff < cashFlowRange*12; }).sort((a,b)=>a.dateObj-b.dateObj).map(d => ({ name: d.axisLabel, income: d.income, expense: d.expense }));
             const expPieData = FORM_CATEGORIES.expense.map(c => ({ name: c, value: parseFloat(formData[c])||0 })).filter(d=>d.value>0).sort((a,b)=>b.value-a.value); const top5Exp = expPieData.slice(0, 5); if (expPieData.length > 5) top5Exp.push({ name: 'ค่าใช้จ่ายอื่น ๆ', value: expPieData.slice(5).reduce((s,i)=>s+i.value,0) }); const totalExp = expPieData.reduce((s,i)=>s+i.value,0);
             // Helper: Find snapshot date in a specific year/month (not exact date match)
             const findSnapshotInMonth = (targetYear, targetMonth) => {
-                if (!availDates || availDates.length === 0) return null;
+                if (availDates.length === 0) return null;
                 // Find all dates in that month/year
                 const monthDates = availDates.filter(d => {
                     const date = new Date(d);
@@ -779,7 +742,7 @@
             };
             
             const getAnnRet = (yrs) => {
-                if (!availDates || availDates.length < 2 || !snapDate) return 0;
+                if (availDates.length < 2 || !snapDate) return 0;
                 const currentDate = new Date(snapDate);
                 const targetDate = new Date(currentDate);
                 targetDate.setFullYear(targetDate.getFullYear() - yrs);
@@ -900,13 +863,8 @@
             );
         }
 
-        try {
-            const root = ReactDOM.createRoot(document.getElementById('root'));
-            root.render(<FinanceDashboard />);
-        } catch (error) {
-            console.error('Error rendering app:', error);
-            document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red;">Error: ' + error.message + '</div>';
-        }
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<FinanceDashboard />);
     </script>
 </body>
 </html>
