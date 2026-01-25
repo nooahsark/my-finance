@@ -180,7 +180,20 @@
                         </div>
                         <div className="grid grid-cols-5 gap-1 mt-1 pt-1 border-t border-slate-100 text-center shrink-0">
                             {[1,3,5,10].map(y=><div key={y}><span className="text-[9px] text-slate-400 font-bold block">{y} ปี</span><span className={`text-[10px] font-bold ${getAnnRet(y)>=0?'text-secondary':'text-alert'}`}>{getAnnRet(y).toFixed(2)}%</span></div>)}
-                            <div><span className="text-[9px] text-slate-400 font-bold block">ตั้งแต่จัดตั้ง</span><span className="text-[10px] font-bold text-primary">{(combinedGraphData.length>0 ? ((combinedGraphData[combinedGraphData.length-1].val - combinedGraphData[0].val)/combinedGraphData[0].val)*100 : 0).toFixed(2)}%</span></div>
+                            <div><span className="text-[9px] text-slate-400 font-bold block">ตั้งแต่จัดตั้ง</span><span className="text-[10px] font-bold text-primary">{(() => {
+                                if (availDates.length === 0 || !snapDate) return '0.00';
+                                // Find first snapshot with value > 0
+                                const firstDate = availDates[0];
+                                const firstSnap = balanceSnapshots[firstDate];
+                                if (!firstSnap) return '0.00';
+                                const firstC = calcAssets(firstSnap, firstDate);
+                                const firstVal = firstC.investment + firstC.liquid + firstC.ss + firstC.ins + firstC.land;
+                                const currVal = overviewCalc.investment + overviewCalc.liquid + overviewCalc.ss + overviewCalc.ins + overviewCalc.land;
+                                if (firstVal <= 0 || currVal <= 0) return '0.00';
+                                const yearsDiff = (new Date(snapDate) - new Date(firstDate)) / (1000 * 60 * 60 * 24 * 365.25);
+                                if (yearsDiff <= 0) return '0.00';
+                                return ((Math.pow(currVal/firstVal, 1/yearsDiff) - 1) * 100).toFixed(2);
+                            })()}%</span></div>
                         </div>
                     </Card>
                 </div>
@@ -383,7 +396,7 @@
                                     <div className="flex justify-between items-center text-xs"><span className="text-slate-600 text-sm">ประกันสังคม</span><span className="font-bold w-24 text-right text-sm text-slate-700">{formatNumber(12600)}</span></div>
                                     <div className="flex justify-between items-center text-xs"><span className="text-slate-600 text-sm">ประกันชีวิต</span><span className="font-bold w-24 text-right text-sm text-indigo-600">{formatNumber(calculateLifeInsuranceValue(new Date(balanceDate)))}</span></div>
                                     <div className="flex justify-between items-center text-xs"><span className="text-slate-600 text-sm">ทองคำ</span><div className="flex gap-2 items-center"><input type="text" placeholder="ราคา/บาท" value={getCurrentSnapValue('goldPrice')} onChange={e=>handleSnap('goldPrice',e.target.value)} className="w-20 border rounded p-1 text-right text-xs" /><span className="w-24 text-right font-bold text-amber-600 text-sm">{formatNumber((parseFloat(getCurrentSnapValue('goldPrice'))||0)*(getHoldings(balanceDate)['ทองคำ']?.qty||0))}</span></div></div>
-                                    <div className="flex justify-between items-center text-xs"><span className="text-slate-600 text-sm">ที่ดิน จ.ลำปาง</span><div className="flex gap-2 items-center"><input type="text" placeholder="ราคา/ตร.วา" value={getCurrentSnapValue('landPrice')} onChange={e=>handleSnap('landPrice',e.target.value)} className="w-20 border rounded p-1 text-right text-xs" placeholder="ราคา/ตร.วา" /><span className="w-24 text-right font-bold text-amber-600 text-sm">{formatNumber((parseFloat(getCurrentSnapValue('landPrice'))||0)*1130)}</span></div></div>
+                                    <div className="flex justify-between items-center text-xs"><span className="text-slate-600 text-sm">ที่ดิน จ.ลำปาง</span><div className="flex gap-2 items-center"><input type="text" placeholder="ราคา/ตร.วา" value={getCurrentSnapValue('landPrice')} onChange={e=>handleSnap('landPrice',e.target.value)} className="w-20 border rounded p-1 text-right text-xs" /><span className="w-24 text-right font-bold text-amber-600 text-sm">{formatNumber((parseFloat(getCurrentSnapValue('landPrice'))||0)*1130)}</span></div></div>
                                 </div>
                             </div>
                         </div>
@@ -646,8 +659,8 @@
             const lastDayOfMonth = new Date(selectedYear, selectedMonthIndex + 1, 0).getDate();
             const overviewDateStr = `${selectedYear}-${String(selectedMonthIndex+1).padStart(2,'0')}-${lastDayOfMonth}`;
             const availDates = Object.keys(balanceSnapshots).sort();
-            const snapDate = availDates.filter(d => d <= overviewDateStr).pop() || availDates[availDates.length-1];
-            const snapData = balanceSnapshots[snapDate];
+            const snapDate = availDates.length > 0 ? (availDates.filter(d => d <= overviewDateStr).pop() || availDates[availDates.length-1]) : null;
+            const snapData = snapDate ? balanceSnapshots[snapDate] : null;
             const overviewCalc = calcAssets(snapData, snapDate || new Date().toISOString());
             const netWorth = overviewCalc.totalAssets - overviewCalc.totalLiab;
 
@@ -676,9 +689,6 @@
             
             const balanceSheetCalc = calcAssets(currentSnapshot, balanceDate);
 
-            const calculateMockIRR = () => { return 7.5; };
-            const currentIRR = calculateMockIRR();
-
             const cards = [ { label: 'ความมั่งคั่งสุทธิ', val: netWorth, color: 'text-primary', b:'border-primary' }, { label: 'สินทรัพย์รวม', val: overviewCalc.totalAssets, color: 'text-secondary', b:'border-secondary' }, { label: 'หนี้สินรวม', val: overviewCalc.totalLiab, color: 'text-alert', b:'border-alert' }, { label: 'เงินสดคงเหลือ', val: overviewCalc.liquid, color: 'text-slate-600', b:'border-slate-300' } ];
             const combinedAssetsData = useMemo(() => {
                 const grouped = {};
@@ -691,6 +701,40 @@
             }, [overviewCalc]);
 
             const graphStartDate = '2016-10-01'; const validGraphDates = availDates.filter(d => d >= graphStartDate && d <= overviewDateStr);
+            
+            const calculateRealIRR = useMemo(() => {
+                if (!validGraphDates || validGraphDates.length < 2 || !snapDate) return 0;
+                const cashFlows = [];
+                const firstDate = new Date(validGraphDates[0]);
+                
+                // Collect all trades as cash flows (buy = negative, sell = positive)
+                if (trades && trades.length > 0) {
+                    trades.forEach(t => {
+                        const tradeDate = new Date(t.date);
+                        if (tradeDate >= firstDate && tradeDate <= new Date(snapDate)) {
+                            if (t.type === 'buy') {
+                                cashFlows.push({ amount: -t.total, date: tradeDate });
+                            } else if (t.type === 'sell' || t.type === 'sell_all') {
+                                cashFlows.push({ amount: t.total, date: tradeDate });
+                            }
+                        }
+                    });
+                }
+                
+                // Add current portfolio value as final cash flow (positive)
+                const currentVal = overviewCalc ? (overviewCalc.investment + overviewCalc.liquid + overviewCalc.ss + overviewCalc.ins + overviewCalc.land) : 0;
+                if (currentVal > 0) {
+                    cashFlows.push({ amount: currentVal, date: new Date(snapDate) });
+                }
+                
+                // Sort by date
+                cashFlows.sort((a, b) => a.date - b.date);
+                
+                if (cashFlows.length < 2) return 0;
+                return calculateXIRR(cashFlows);
+            }, [trades, validGraphDates, snapDate, overviewCalc]);
+            const currentIRR = calculateRealIRR;
+            
             let lastBenchmarkNav = 0;
             const benchmarkData = validGraphDates.map(d => {
                 const nav = balanceSnapshots[d]?.benchmarkNav;
@@ -706,12 +750,50 @@
                     benchmarkVal: lastBenchmarkNav > 0 ? lastBenchmarkNav : null
                 };
             });
-            const graphData = validGraphDates.map((d, i) => { const c = calcAssets(balanceSnapshots[d], d); const metric = c.investment + c.liquid + c.ss + c.ins + c.land + c.personal; return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; });
+            const graphData = validGraphDates.map((d, i) => { const c = calcAssets(balanceSnapshots[d], d); const metric = c.investment + c.liquid + c.ss + c.ins + c.land; return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; });
             const combinedGraphData = graphData.map((d, i) => ({ ...d, benchmarkVal: benchmarkData[i]?.benchmarkVal }));
 
             const cashFlowData = historicalData.filter(d => { const selDate = new Date(selectedYear, selectedMonthIndex, 1); const diff = (selDate - d.dateObj)/(1000*60*60*24*30); return diff >= 0 && diff < cashFlowRange*12; }).sort((a,b)=>a.dateObj-b.dateObj).map(d => ({ name: d.axisLabel, income: d.income, expense: d.expense }));
             const expPieData = FORM_CATEGORIES.expense.map(c => ({ name: c, value: parseFloat(formData[c])||0 })).filter(d=>d.value>0).sort((a,b)=>b.value-a.value); const top5Exp = expPieData.slice(0, 5); if (expPieData.length > 5) top5Exp.push({ name: 'ค่าใช้จ่ายอื่น ๆ', value: expPieData.slice(5).reduce((s,i)=>s+i.value,0) }); const totalExp = expPieData.reduce((s,i)=>s+i.value,0);
-            const getAnnRet = (yrs) => { if (validGraphDates.length < 2) return 0; const targetD = new Date(overviewDateStr); targetD.setFullYear(targetD.getFullYear() - yrs); const dStr = targetD.toISOString().split('T')[0]; const pastD = validGraphDates.filter(d => d <= dStr).pop(); if (!pastD) return 0; const pastC = calcAssets(balanceSnapshots[pastD], pastD); const pastVal = pastC.investment + pastC.liquid + pastC.ss + pastC.ins + pastC.land + pastC.personal; const currVal = overviewCalc.investment + overviewCalc.liquid + overviewCalc.ss + overviewCalc.ins + overviewCalc.land + overviewCalc.personal; if(pastVal <= 0) return 0; return (Math.pow(currVal/pastVal, 1/yrs) - 1) * 100; };
+            // Helper: Find snapshot date in a specific year/month (not exact date match)
+            const findSnapshotInMonth = (targetYear, targetMonth) => {
+                if (!availDates || availDates.length === 0) return null;
+                // Find all dates in that month/year
+                const monthDates = availDates.filter(d => {
+                    const date = new Date(d);
+                    return date.getFullYear() === targetYear && date.getMonth() === targetMonth;
+                });
+                if (monthDates.length > 0) {
+                    // Return the latest date in that month
+                    return monthDates.sort().pop();
+                }
+                // If no exact match, find the closest date before or in that month
+                const targetDate = new Date(targetYear, targetMonth + 1, 0); // Last day of month
+                return availDates.filter(d => d <= targetDate.toISOString().split('T')[0]).pop() || null;
+            };
+            
+            const getAnnRet = (yrs) => {
+                if (availDates.length < 2 || !snapDate) return 0;
+                const currentDate = new Date(snapDate);
+                const targetDate = new Date(currentDate);
+                targetDate.setFullYear(targetDate.getFullYear() - yrs);
+                
+                // Find snapshot in target year/month
+                const pastD = findSnapshotInMonth(targetDate.getFullYear(), targetDate.getMonth());
+                if (!pastD) return 0;
+                
+                const pastC = calcAssets(balanceSnapshots[pastD], pastD);
+                const pastVal = pastC.investment + pastC.liquid + pastC.ss + pastC.ins + pastC.land;
+                const currVal = overviewCalc.investment + overviewCalc.liquid + overviewCalc.ss + overviewCalc.ins + overviewCalc.land;
+                
+                if(pastVal <= 0 || currVal <= 0) return 0;
+                
+                // Calculate actual years difference for more accurate return
+                const actualYears = (currentDate - new Date(pastD)) / (1000 * 60 * 60 * 24 * 365.25);
+                if(actualYears <= 0) return 0;
+                
+                return (Math.pow(currVal/pastVal, 1/actualYears) - 1) * 100;
+            };
             const getBudgetAvg = (category, yearsBack) => { const monthsBack = yearsBack * 12; const now = new Date(selectedYear, selectedMonthIndex, 1); const relevantData = historicalData.filter(d => { const diff = (now - d.dateObj) / (1000*60*60*24*30); return diff >= 0 && diff < monthsBack; }); if(relevantData.length === 0) return 0; return relevantData.reduce((acc, d) => acc + (parseFloat(d.details[category]) || 0), 0) / relevantData.length; };
             const renderDonutListContent = (data, totalValue, totalColorClass) => ( <div className="h-full flex flex-col pt-6"><div className="flex-1 overflow-y-auto no-scrollbar pr-1 flex flex-col gap-2 text-sm">{data.map((e, i) => (<div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50"><div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS_MAIN[i % COLORS_MAIN.length] }}></div><span className="truncate flex-1 font-medium text-slate-600">{e.name}</span></div><div className="flex items-center gap-3 font-bold text-sm"><span className="text-slate-700 w-16 text-right">{formatNumber(e.value, 0)}</span><span className={`${totalColorClass} w-10 text-right`}>{((e.value / totalValue) * 100).toFixed(1)}%</span></div></div>))}</div><div className="flex justify-between items-center pt-2 mt-2 border-t border-slate-200"><span className="font-bold text-slate-800 text-base">รวม</span><span className={`text-lg font-extrabold ${totalColorClass}`}>{formatNumber(totalValue, 0)}</span></div></div> );
             const renderAssetList = renderDonutListContent(combinedAssetsData, overviewCalc.totalAssets, 'text-primary');
