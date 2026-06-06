@@ -170,17 +170,17 @@
                                 <LineChart data={combinedGraphData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0"/>
                                     <XAxis dataKey="date" tick={{fontSize:10}}/>
-                                    <YAxis domain={['auto', 'auto']} tick={{fontSize:10}} tickFormatter={v=>`${(v/1e6).toFixed(1)}M`}/>
-                                    <Tooltip formatter={(v, n, p) => formatNumber(v)}/>
-                                    <Line type="monotone" dataKey="val" name="มูลค่าสินทรัพย์รวม" stroke="#1e3a8a" strokeWidth={3} dot={false}/>
-                                    <Line type="monotone" dataKey="benchmarkVal" name="Benchmark (NAV)" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                                    <YAxis domain={['auto', 'auto']} tick={{fontSize:10}} tickFormatter={v=>`${Number(v).toFixed(0)}%`}/>
+                                    <Tooltip formatter={(v) => v != null && !isNaN(v) ? `${Number(v).toFixed(2)}%` : '-'}/>
+                                    <Line type="monotone" dataKey="val" name="ผลตอบแทนสะสม (พอร์ต)" stroke="#1e3a8a" strokeWidth={3} dot={false}/>
+                                    <Line type="monotone" dataKey="benchmarkVal" name="Benchmark (NAV)" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 5" connectNulls />
                                     <Legend wrapperStyle={{fontSize: 10, padding: '5px 0 0 0'}} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
                         <div className="grid grid-cols-5 gap-1 mt-1 pt-1 border-t border-slate-100 text-center shrink-0">
                             {[1,3,5,10].map(y=><div key={y}><span className="text-[9px] text-slate-400 font-bold block">{y} ปี</span><span className={`text-[10px] font-bold ${getAnnRet(y)>=0?'text-secondary':'text-alert'}`}>{getAnnRet(y).toFixed(2)}%</span></div>)}
-                            <div><span className="text-[9px] text-slate-400 font-bold block">ตั้งแต่จัดตั้ง</span><span className="text-[10px] font-bold text-primary">{(combinedGraphData.length>0 ? ((combinedGraphData[combinedGraphData.length-1].val - combinedGraphData[0].val)/combinedGraphData[0].val)*100 : 0).toFixed(2)}%</span></div>
+                            <div><span className="text-[9px] text-slate-400 font-bold block">ตั้งแต่จัดตั้ง</span><span className="text-[10px] font-bold text-primary">{(combinedGraphData.length>0 ? combinedGraphData[combinedGraphData.length-1].val : 0).toFixed(2)}%</span></div>
                         </div>
                     </Card>
                 </div>
@@ -706,14 +706,23 @@
                     benchmarkVal: lastBenchmarkNav > 0 ? lastBenchmarkNav : null
                 };
             });
-            const graphData = validGraphDates.map((d, i) => { const c = calcAssets(balanceSnapshots[d], d); const metric = c.investment + c.liquid + c.ss + c.ins + c.land + c.personal; return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: metric }; });
-            const combinedGraphData = graphData.map((d, i) => ({ ...d, benchmarkVal: benchmarkData[i]?.benchmarkVal }));
+            const graphData = validGraphDates.map((d, i) => { const c = calcAssets(balanceSnapshots[d], d); return { date: new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'}), val: c.totalAssets }; });
+            const baseAssets = graphData[0]?.val > 0 ? graphData[0].val : (graphData.find(d => d.val > 0)?.val || 1);
+            const baseBenchmark = benchmarkData[0]?.benchmarkVal > 0 ? benchmarkData[0].benchmarkVal : (benchmarkData.find(b => b.benchmarkVal > 0)?.benchmarkVal || null);
+            const combinedGraphData = graphData.map((d, i) => {
+                const bench = benchmarkData[i]?.benchmarkVal;
+                return {
+                    date: d.date,
+                    val: baseAssets > 0 ? ((d.val / baseAssets) - 1) * 100 : 0,
+                    benchmarkVal: baseBenchmark && bench != null ? ((bench / baseBenchmark) - 1) * 100 : null,
+                };
+            });
 
             const cashFlowData = historicalData.filter(d => { const selDate = new Date(selectedYear, selectedMonthIndex, 1); const diff = (selDate - d.dateObj)/(1000*60*60*24*30); return diff >= 0 && diff < cashFlowRange*12; }).sort((a,b)=>a.dateObj-b.dateObj).map(d => ({ name: d.axisLabel, income: d.income, expense: d.expense }));
             const expPieData = FORM_CATEGORIES.expense.map(c => ({ name: c, value: parseFloat(formData[c])||0 })).filter(d=>d.value>0).sort((a,b)=>b.value-a.value); const top5Exp = expPieData.slice(0, 5); if (expPieData.length > 5) top5Exp.push({ name: 'ค่าใช้จ่ายอื่น ๆ', value: expPieData.slice(5).reduce((s,i)=>s+i.value,0) }); const totalExp = expPieData.reduce((s,i)=>s+i.value,0);
-            const getAnnRet = (yrs) => { if (validGraphDates.length < 2) return 0; const targetD = new Date(overviewDateStr); targetD.setFullYear(targetD.getFullYear() - yrs); const dStr = targetD.toISOString().split('T')[0]; const pastD = validGraphDates.filter(d => d <= dStr).pop(); if (!pastD) return 0; const pastC = calcAssets(balanceSnapshots[pastD], pastD); const pastVal = pastC.investment + pastC.liquid + pastC.ss + pastC.ins + pastC.land + pastC.personal; const currVal = overviewCalc.investment + overviewCalc.liquid + overviewCalc.ss + overviewCalc.ins + overviewCalc.land + overviewCalc.personal; if(pastVal <= 0) return 0; return (Math.pow(currVal/pastVal, 1/yrs) - 1) * 100; };
+            const getAnnRet = (yrs) => { if (validGraphDates.length < 2) return 0; const targetD = new Date(overviewDateStr); targetD.setFullYear(targetD.getFullYear() - yrs); const dStr = targetD.toISOString().split('T')[0]; const pastD = validGraphDates.filter(d => d <= dStr).pop(); if (!pastD) return 0; const pastC = calcAssets(balanceSnapshots[pastD], pastD); const pastVal = pastC.totalAssets; const currVal = overviewCalc.totalAssets; if(pastVal <= 0) return 0; return (Math.pow(currVal/pastVal, 1/yrs) - 1) * 100; };
             const getBudgetAvg = (category, yearsBack) => { const monthsBack = yearsBack * 12; const now = new Date(selectedYear, selectedMonthIndex, 1); const relevantData = historicalData.filter(d => { const diff = (now - d.dateObj) / (1000*60*60*24*30); return diff >= 0 && diff < monthsBack; }); if(relevantData.length === 0) return 0; return relevantData.reduce((acc, d) => acc + (parseFloat(d.details[category]) || 0), 0) / relevantData.length; };
-            const renderDonutListContent = (data, totalValue, totalColorClass) => ( <div className="h-full flex flex-col pt-6"><div className="flex-1 overflow-y-auto no-scrollbar pr-1 flex flex-col gap-2 text-sm">{data.map((e, i) => (<div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50"><div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS_MAIN[i % COLORS_MAIN.length] }}></div><span className="truncate flex-1 font-medium text-slate-600">{e.name}</span></div><div className="flex items-center gap-3 font-bold text-sm"><span className="text-slate-700 w-16 text-right">{formatNumber(e.value, 0)}</span><span className={`${totalColorClass} w-10 text-right`}>{((e.value / totalValue) * 100).toFixed(1)}%</span></div></div>))}</div><div className="flex justify-between items-center pt-2 mt-2 border-t border-slate-200"><span className="font-bold text-slate-800 text-base">รวม</span><span className={`text-lg font-extrabold ${totalColorClass}`}>{formatNumber(totalValue, 0)}</span></div></div> );
+            const renderDonutListContent = (data, totalValue, totalColorClass) => ( <div className="h-full flex flex-col pt-6"><div className="flex-1 overflow-y-auto no-scrollbar pr-1 flex flex-col gap-2 text-sm">{data.map((e, i) => (<div key={i} className="flex justify-between items-center py-0.5 border-b border-slate-50"><div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS_MAIN[i % COLORS_MAIN.length] }}></div><span className="truncate flex-1 font-medium text-slate-600">{e.name}</span></div><div className="flex items-center gap-3 font-bold text-sm"><span className="text-slate-700 w-16 text-right">{formatNumber(e.value, 0)}</span><span className={`${totalColorClass} w-10 text-right`}>{totalValue > 0 ? ((e.value / totalValue) * 100).toFixed(1) : '0.0'}%</span></div></div>))}</div><div className="flex justify-between items-center pt-2 mt-2 border-t border-slate-200"><span className="font-bold text-slate-800 text-base">รวม</span><span className={`text-lg font-extrabold ${totalColorClass}`}>{formatNumber(totalValue, 0)}</span></div></div> );
             const renderAssetList = renderDonutListContent(combinedAssetsData, overviewCalc.totalAssets, 'text-primary');
             const renderExpenseList = renderDonutListContent(top5Exp, totalExp, 'text-alert');
             const totalInc = FORM_CATEGORIES.income.reduce((s,k)=>s+(parseFloat(formData[k])||0),0); const totalSav = FORM_CATEGORIES.savings.reduce((s,k)=>s+(parseFloat(formData[k])||0),0); const net = totalInc - totalExp - totalSav;
@@ -750,9 +759,20 @@
                     try {
                         const data = JSON.parse(e.target.result);
                         if (data.historicalData && data.trades && data.balanceSnapshots) {
-                            setHistoricalData(data.historicalData);
+                            setHistoricalData(data.historicalData.map(d => ({ ...d, dateObj: new Date(d.dateObj) })));
                             setTrades(data.trades);
-                            setBalanceSnapshots(data.balanceSnapshots);
+                            const stringifiedSnaps = {};
+                            for (const date in data.balanceSnapshots) {
+                                const snap = data.balanceSnapshots[date];
+                                const newSnap = {};
+                                for (const key in snap) {
+                                    if (typeof snap[key] === 'number' || typeof snap[key] === 'string') { newSnap[key] = String(snap[key]); }
+                                    else if (key === 'prices' && snap.prices) { newSnap.prices = Object.keys(snap.prices).reduce((acc, sym) => { acc[sym] = String(snap.prices[sym]); return acc; }, {}); }
+                                    else { newSnap[key] = snap[key]; }
+                                }
+                                stringifiedSnaps[date] = newSnap;
+                            }
+                            setBalanceSnapshots(stringifiedSnaps);
                             alert('Import Successful!');
                         } else {
                             alert('Invalid file format');
