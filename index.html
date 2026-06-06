@@ -118,6 +118,31 @@
         const formatChartDate = (ts) => new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
         const calculateXIRR = (cashFlows, guess = 0.1) => { if (cashFlows.length < 2) return 0; const maxIterations = 50; const tolerance = 1e-6; let x0 = guess; for (let i = 0; i < maxIterations; i++) { let fValue = 0, fDerivative = 0; for (const { amount, date } of cashFlows) { const days = (date - cashFlows[0].date) / (1000 * 60 * 60 * 24); const years = days / 365; const factor = Math.pow(1 + x0, years); fValue += amount / factor; fDerivative -= (years * amount) / (factor * (1 + x0)); } if (Math.abs(fValue) < tolerance) return x0 * 100; const x1 = x0 - fValue / fDerivative; if (Math.abs(x1 - x0) < tolerance) return x1 * 100; x0 = x1; } return x0 * 100; };
         const calculateLifeInsuranceValue = (queryDate) => { const startDate = new Date(2014, 1, 7); if (queryDate < startDate) return 0; let years = queryDate.getFullYear() - startDate.getFullYear(); const m = queryDate.getMonth() - startDate.getMonth(); if (m < 0 || (m === 0 && queryDate.getDate() < startDate.getDate())) { years--; } const policyYear = years + 1; if (policyYear >= 77) return 200000; return LIFE_INSURANCE_TABLE[policyYear] || 0; };
+        const LIFE_INS_START = new Date(2014, 1, 7);
+        const LIFE_INS_PREMIUM = 341.4;
+        const LIFE_INS_PREMIUM_MONTHS = 20 * 12;
+        const getLifeInsurancePremiumMonthsPaid = (queryDate) => {
+            if (queryDate < LIFE_INS_START) return 0;
+            const endPremium = new Date(LIFE_INS_START);
+            endPremium.setFullYear(endPremium.getFullYear() + 20);
+            const limit = queryDate < endPremium ? queryDate : endPremium;
+            let months = (limit.getFullYear() - LIFE_INS_START.getFullYear()) * 12 + (limit.getMonth() - LIFE_INS_START.getMonth());
+            if (limit.getDate() < LIFE_INS_START.getDate()) months--;
+            months = Math.max(0, months) + 1;
+            return Math.min(months, LIFE_INS_PREMIUM_MONTHS);
+        };
+        const getLifeInsurancePremiumPaid = (queryDate) => getLifeInsurancePremiumMonthsPaid(queryDate) * LIFE_INS_PREMIUM;
+        const getLifeInsurancePremiumFlows = (afterDate, upToDate) => {
+            const flows = [];
+            const endPremium = new Date(LIFE_INS_START);
+            endPremium.setFullYear(endPremium.getFullYear() + 20);
+            let cursor = new Date(LIFE_INS_START);
+            while (cursor <= upToDate && cursor < endPremium) {
+                if (cursor > afterDate) flows.push({ amount: -LIFE_INS_PREMIUM, date: new Date(cursor) });
+                cursor.setMonth(cursor.getMonth() + 1);
+            }
+            return flows;
+        };
         const cleanNumericInput = (val) => { let cleanVal = val.replace(/[^\d.]/g, ''); const parts = cleanVal.split('.'); if (parts.length > 2) { cleanVal = parts[0] + '.' + parts.slice(1).join(''); } return cleanVal; };
         const getTodayString = () => { const d = new Date(); const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${year}-${month}-${day}`; };
 
@@ -689,11 +714,10 @@
             
             const balanceSheetCalc = calcAssets(currentSnapshot, balanceDate);
 
-            // มูลค่าที่ใช้คำนวณผลตอบแทน — ไม่รวมประกันชีวิต/ประกันสังคมที่โตตามตาราง
+            // เส้นน้ำเงิน: ลงทุน + เงินสด + ประกันชีวิต/สังคม | เงินเข้า = ซื้อ − ขาย + เบี้ย
             const getInvestableValue = (snap, date) => {
                 const c = calcAssets(snap, date);
-                const autoGrowth = c.list.filter(i => i.type === 'ins' || i.type === 'ss').reduce((s, i) => s + i.value, 0);
-                return c.investment - autoGrowth;
+                return c.investment + c.liquid;
             };
             const getTradeNetFlow = (t) => {
                 const total = Number(t.total) || 0;
@@ -702,10 +726,11 @@
                 return 0;
             };
             const getCumulativeContributions = (upToDateStr) => {
-                const limit = new Date(upToDateStr + 'T23:59:59');
-                return trades
-                    .filter(t => new Date(t.date) <= limit)
+                const limit = parseDateKey(upToDateStr);
+                const fromTrades = trades
+                    .filter(t => parseDateKey(t.date) <= limit)
                     .reduce((s, t) => s + getTradeNetFlow(t), 0);
+                return fromTrades + getLifeInsurancePremiumPaid(limit);
             };
             const calcPerformancePct = (currentVal, baseVal, netContributions) => {
                 const gain = currentVal - baseVal - netContributions;
@@ -762,17 +787,18 @@
 
             const calculatePortfolioIRR = () => {
                 if (!graphStart || !snapDate) return 0;
-                const startDate = new Date(graphStart);
-                const endDate = new Date(snapDate);
+                const startDate = parseDateKey(graphStart);
+                const endDate = parseDateKey(snapDate);
                 const flows = [];
                 const initialInv = getInvestableValue(balanceSnapshots[graphStart], graphStart);
                 if (initialInv > 0) flows.push({ amount: -initialInv, date: startDate });
                 trades
-                    .filter(t => { const td = new Date(t.date); return td > startDate && td <= endDate; })
+                    .filter(t => { const td = parseDateKey(t.date); return td > startDate && td <= endDate; })
                     .forEach(t => {
                         const net = getTradeNetFlow(t);
-                        if (net !== 0) flows.push({ amount: -net, date: new Date(t.date) });
+                        if (net !== 0) flows.push({ amount: -net, date: parseDateKey(t.date) });
                     });
+                getLifeInsurancePremiumFlows(startDate, endDate).forEach(f => flows.push(f));
                 const currentInv = getInvestableValue(snapData, snapDate);
                 if (currentInv > 0) flows.push({ amount: currentInv, date: endDate });
                 flows.sort((a, b) => a.date - b.date);
