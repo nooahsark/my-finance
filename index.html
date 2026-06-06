@@ -114,6 +114,8 @@
         
         const formatNumber = (val, digits=0) => new Intl.NumberFormat('th-TH', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(val);
         const formatCurrency = (val) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(val);
+        const parseDateKey = (d) => { const [y, m, day] = d.split('-').map(Number); return new Date(y, m - 1, day); };
+        const formatChartDate = (ts) => new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
         const calculateXIRR = (cashFlows, guess = 0.1) => { if (cashFlows.length < 2) return 0; const maxIterations = 50; const tolerance = 1e-6; let x0 = guess; for (let i = 0; i < maxIterations; i++) { let fValue = 0, fDerivative = 0; for (const { amount, date } of cashFlows) { const days = (date - cashFlows[0].date) / (1000 * 60 * 60 * 24); const years = days / 365; const factor = Math.pow(1 + x0, years); fValue += amount / factor; fDerivative -= (years * amount) / (factor * (1 + x0)); } if (Math.abs(fValue) < tolerance) return x0 * 100; const x1 = x0 - fValue / fDerivative; if (Math.abs(x1 - x0) < tolerance) return x1 * 100; x0 = x1; } return x0 * 100; };
         const calculateLifeInsuranceValue = (queryDate) => { const startDate = new Date(2014, 1, 7); if (queryDate < startDate) return 0; let years = queryDate.getFullYear() - startDate.getFullYear(); const m = queryDate.getMonth() - startDate.getMonth(); if (m < 0 || (m === 0 && queryDate.getDate() < startDate.getDate())) { years--; } const policyYear = years + 1; if (policyYear >= 77) return 200000; return LIFE_INSURANCE_TABLE[policyYear] || 0; };
         const cleanNumericInput = (val) => { let cleanVal = val.replace(/[^\d.]/g, ''); const parts = cleanVal.split('.'); if (parts.length > 2) { cleanVal = parts[0] + '.' + parts.slice(1).join(''); } return cleanVal; };
@@ -169,9 +171,20 @@
                             <ResponsiveContainer>
                                 <LineChart data={combinedGraphData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0"/>
-                                    <XAxis dataKey="date" tick={{fontSize:10}}/>
+                                    <XAxis
+                                        dataKey="timestamp"
+                                        type="number"
+                                        scale="time"
+                                        domain={['dataMin', 'dataMax']}
+                                        tick={{ fontSize: 10 }}
+                                        tickFormatter={formatChartDate}
+                                        minTickGap={28}
+                                    />
                                     <YAxis domain={['auto', 'auto']} tick={{fontSize:10}} tickFormatter={v=>`${Number(v).toFixed(0)}%`}/>
-                                    <Tooltip formatter={(v) => v != null && !isNaN(v) ? `${Number(v).toFixed(2)}%` : '-'}/>
+                                    <Tooltip
+                                        labelFormatter={formatChartDate}
+                                        formatter={(v) => v != null && !isNaN(v) ? `${Number(v).toFixed(2)}%` : '-'}
+                                    />
                                     <Line type="monotone" dataKey="val" name="ผลตอบแทนสะสม (พอร์ต)" stroke="#1e3a8a" strokeWidth={3} dot={false}/>
                                     <Line type="monotone" dataKey="benchmarkVal" name="Benchmark (NAV)" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 5" connectNulls />
                                     <Legend wrapperStyle={{fontSize: 10, padding: '5px 0 0 0'}} />
@@ -731,7 +744,8 @@
             const baseInv = graphStart ? getInvestableValue(balanceSnapshots[graphStart], graphStart) : 0;
             const baseContrib = graphStart ? getCumulativeContributions(graphStart) : 0;
             const graphData = validGraphDates.map((d) => ({
-                date: new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }),
+                date: parseDateKey(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }),
+                timestamp: parseDateKey(d).getTime(),
                 invVal: getInvestableValue(balanceSnapshots[d], d),
                 netContrib: getCumulativeContributions(d) - baseContrib,
             }));
@@ -740,6 +754,7 @@
                 const bench = benchmarkData[i]?.benchmarkVal;
                 return {
                     date: d.date,
+                    timestamp: d.timestamp,
                     val: calcPerformancePct(d.invVal, baseInv, d.netContrib),
                     benchmarkVal: baseBenchmark && bench != null ? ((bench / baseBenchmark) - 1) * 100 : null,
                 };
