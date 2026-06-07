@@ -714,11 +714,8 @@
             
             const balanceSheetCalc = calcAssets(currentSnapshot, balanceDate);
 
-            // เส้นน้ำเงิน: ลงทุน + เงินสด + ประกันชีวิต/สังคม | เงินเข้า = ซื้อ − ขาย + เบี้ย
-            const getInvestableValue = (snap, date) => {
-                const c = calcAssets(snap, date);
-                return c.investment + c.liquid;
-            };
+            // เส้นน้ำเงิน: ลงทุน + ประกันชีวิต/สังคม (ไม่รวมเงินสด) | เงินเข้า = ซื้อ − ขาย + เบี้ย
+            const getInvestableValue = (snap, date) => calcAssets(snap, date).investment;
             const getTradeNetFlow = (t) => {
                 const total = Number(t.total) || 0;
                 if (t.type === 'buy') return total;
